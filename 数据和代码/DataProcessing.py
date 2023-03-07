@@ -3,6 +3,48 @@ import numpy as np
 import functools
 from queue import Queue
 import operator
+import random
+from collections import defaultdict
+import pandas as pd
+
+def read_data(file_path):
+    '''读取初始表数据，先转成csv格式'''
+    df = pd.read_csv(  \
+        file_path,usecols = [0,6,8,16,18,21,22],  \
+        dtype={ \
+            'clogid':int,  \
+            'calarmcode':int,   \
+            'cneid':int,     \
+            'coccuructime':object , \
+            'ccleaructime':object , \
+            'clocationinfo':object, \
+            'clinport':object  \
+        },  \
+        low_memory=False)
+    data = df.values
+    return data
+
+def getContextofLocs(data):
+    '''返回：
+    所有数据的clocationinfo信息列表locs
+    反索引列表locToIndexOflocs
+    loc对应的网元id、端口信息、定位信息列表locstoneid
+    '''
+    ## locs
+    dataByloc = getdataByloc(data)
+    locs=[key for key in dataByloc]
+    print('共有'+str(len(locs))+'个定位点')
+    
+    ## locToIndexOflocs
+    locToIndexOflocs = {}
+    for i in range(len(locs)):
+        locToIndexOflocs[locs[i]] = i
+
+    ## locstoneid
+    locstoneid={}
+    for i in range(len(locs)):
+        locstoneid[locs[i]]=[dataByloc[locs[i]][0][2],dataByloc[locs[i]][0][5],dataByloc[locs[i]][0][6]]
+    return locs,locToIndexOflocs,locstoneid
 
 def getdataByalarmcode(data):
     '''
@@ -42,6 +84,13 @@ def getdataByneid(data):
             dataByneid[ele]=[alarm]
     return dataByneid
 
+def getoccurtimelist(data):
+    '''返回所有告警的告警时间列表'''
+    timelist=[]
+    for alarm in data:
+        timelist.append(alarm[3])
+    return timelist
+
 def sortByoccurtime(data):
     '''
     根据告警发生时间排序
@@ -49,7 +98,6 @@ def sortByoccurtime(data):
     # data.sort(key=lambda x : datetime.strptime(x[3],'%Y/%m/%d %H:%M'))
     data=sorted(data,key=lambda x : datetime.strptime(x[3],'%Y/%m/%d %H:%M'), reverse=False)
     return data
-
 
 def Datacleaninside(data,Max_Interval = 300):
     '''
@@ -131,6 +179,14 @@ def Seqs_dim_reduction(Seqs):
     PS:执行时间随序列的项目集大小、长度指数级增长
     '''
     def SeqtoSeqs(seq):
+        #估计产生的序列数
+        estimate = 1
+        for items in seq:
+            estimate *= len(items)
+        #为了加速产生序列，会对预计产生超大序列库的序列进行二分
+        if estimate >= 100000:
+            x = len(seq)
+            return SeqtoSeqs(seq[:int(x/2)])+SeqtoSeqs(seq[int(x/2):])
         res = []
         que = Queue()
         que.put(seq)
@@ -147,6 +203,37 @@ def Seqs_dim_reduction(Seqs):
                  res.append(list(map(lambda x:x[0],s)))
         return res
     res = []
-    for Seq in Seqs:
+    for i,Seq in enumerate(Seqs):
         res += SeqtoSeqs(Seq)
+        if i%100 == 0 :
+            print(f'生成二维序列库中：{i+1}/{len(Seqs)}',end='\r')
+    res = [list(x) for x in list(set([tuple(x) for x in res]))]
     return res
+
+def data_split(data,num_test):
+    '''
+    从data中均匀分布地、随机拆出num_test条测试集，其余的作为训练集
+    返回: train,test
+    '''
+    test,train = [],[]
+    x = len(data)
+    if num_test>=x: return [],data
+    cylce = int(x/num_test)
+    remainder = x%num_test
+    i = 0
+    while(i < x-remainder):
+        pos = random.randint(i,i+cylce-1)
+        test.append(data[pos])
+        train += data[i:pos] + data[pos+1:i+cylce]
+        i+=cylce
+    train += data[i:]
+    return train,test
+
+def Genitemsets(data):
+    '''
+    按告警时间生成所有项目集合
+    '''
+    timeToitemsets = defaultdict(list)
+    for i in range(len(data)):
+        timeToitemsets[data[i][3]].append(data[i])
+    return list(timeToitemsets.values())
