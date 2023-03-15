@@ -20,7 +20,7 @@ def read_data(file_path):
             'clocationinfo':object, \
             'clinport':object  \
         },  \
-        low_memory=False)
+        low_memory=False,encoding="gbk")
     data = df.values
     return data
 
@@ -237,3 +237,41 @@ def Genitemsets(data):
     for i in range(len(data)):
         timeToitemsets[data[i][3]].append(data[i])
     return list(timeToitemsets.values())
+
+def Datacluster(data,eps=0.001,min_samples=1):
+    '''
+    同一网元的告警数据按告警时间聚类，使用DBSCAN算法进行聚类，结果中每类取时间最早的那一个告警数据
+    '''
+    from sklearn.cluster import DBSCAN
+    from sklearn.preprocessing import StandardScaler
+    dataByloc=getdataByloc(data)
+    newdata=[]
+    for loc in dataByloc:
+        alarms=dataByloc[loc]
+        alarmsByac = getdataByalarmcode(alarms)
+        for code in alarmsByac:
+            alarmBysamecode=alarmsByac[code]
+            alarmBysamecode=sortByoccurtime(alarmBysamecode)
+            X=[[datetime.strptime(i[3],'%Y/%m/%d %H:%M')] for i in alarmBysamecode]
+            X = pd.DataFrame(X)
+            scaler = StandardScaler()
+            X = scaler.fit_transform(X)
+            db = DBSCAN(eps=eps, min_samples=min_samples)
+            db.fit(X)
+            labelTodata = defaultdict(list)
+            labelTomaxdiff = defaultdict(int)
+            for i in range(len(db.labels_)):
+                labelTodata[db.labels_[i]].append(alarmBysamecode[i])
+                labelTomaxdiff[db.labels_[i]] = datetime.strptime(labelTodata[db.labels_[i]][-1][3],'%Y/%m/%d %H:%M') - datetime.strptime(labelTodata[db.labels_[i]][0][3],'%Y/%m/%d %H:%M')
+                labelTomaxdiff[db.labels_[i]] = labelTomaxdiff[db.labels_[i]].total_seconds()
+            for label in labelTodata:
+                newdata.append(labelTodata[db.labels_[i]][0])
+            pass
+    return newdata
+
+if __name__ == '__main__':
+    file_path = 'C:\\Users\\xsaopig\\Desktop\\5G承载网项目\\5G承载网故障检测数据\\Data\\t_alarmloghist_1_1.csv'
+    data = read_data(file_path)
+    print('数据内部清洗前长度为',len(data))
+    data = Datacluster(data)
+    print('数据内部清洗后长度为',len(data))

@@ -13,8 +13,10 @@ output_assorules_path = '.\\output\\assorules.csv'
 if __name__ == '__main__':
     data = dp.read_data(file_path)
     print('数据内部清洗前长度为',len(data))
-    data = dp.Datacleaninside(data,300)
-    print('数据内部清洗后长度为',len(data))
+    # data = dp.Datacleaninside(data,300)
+    # print('数据内部清洗后长度为',len(data))
+    data = dp.Datacluster(data,eps=0.0005)
+    print('数据按告警时间后长度为',len(data))
 
     ## locs,locToIndexOflocs,locstoneid
     locs,locToIndexOflocs,locstoneid = dp.getContextofLocs(data)

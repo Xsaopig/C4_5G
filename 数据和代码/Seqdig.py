@@ -14,8 +14,10 @@ output_seqrules_path = '.\\output\\seqrules.csv'
 if __name__ == '__main__':
     data = dp.read_data(file_path)
     print('数据内部清洗前长度为',len(data))
-    data = dp.Datacleaninside(data,300)
-    print('数据内部清洗后长度为',len(data))
+    # data = dp.Datacleaninside(data,300)
+    # print('数据内部清洗后长度为',len(data))
+    data = dp.Datacluster(data,eps=0.0005)
+    print('数据按告警时间后长度为',len(data))
 
     ## locs,locToIndexOflocs,locstoneid
     locs,locToIndexOflocs,locstoneid = dp.getContextofLocs(data)
@@ -26,7 +28,7 @@ if __name__ == '__main__':
 
 
     ## 生成所有时间序列
-    Seqs = dp.GenSeqs(data,600)
+    Seqs = dp.GenSeqs(data,500)
     print('共有'+str(len(Seqs))+'个序列')
     # 对序列进行字符串化,去除序列中每个项目集的重复项
     for i in range(len(Seqs)):
@@ -37,17 +39,19 @@ if __name__ == '__main__':
         Seqs[i] = dp.Seq_compression(Seqs[i])
     # 按序列长度排个序
     Seqs = sorted(Seqs,key = lambda x: len(x))
+    maxseqlen = max([len(Seq) for Seq in Seqs])
+    print(f'最长序列长度为{maxseqlen}')
 
 
-    # ## 频繁序列挖掘 SPAM
-    # freqSeqs = Mining_FreSeqPatterns(Seqs,minsp=10.0/len(Seqs),minpatternlen=2,maxpatternlen=10,maxgap=100)
-    # freqSeqs = sorted(freqSeqs,key = lambda x: x[-1])
-    # # 保存挖掘出的频繁序列
-    # column_Seq = pd.Series([x[0] for x in freqSeqs],name='Seq')
-    # column_Seq_detailed = pd.Series([[[locstoneid[locs[int(item)]] for item in items] for items in x[0]] for x in freqSeqs],name='Seq_detailed') #具体点的
-    # column_sup = pd.Series([x[1] for x in freqSeqs],name='sup')
-    # con = pd.concat([column_Seq,column_Seq_detailed,column_sup],axis=1)
-    # con.to_csv(output_freseqs_path,index = True,sep=',',mode='w+',encoding='utf_8_sig')
+    ## 频繁序列挖掘 SPAM
+    freqSeqs = Mining_FreSeqPatterns(Seqs,minsp=3.0/len(Seqs),minpatternlen=2,maxpatternlen=10,maxgap=100)
+    freqSeqs = sorted(freqSeqs,key = lambda x: x[-1])
+    # 保存挖掘出的频繁序列
+    column_Seq = pd.Series([x[0] for x in freqSeqs],name='Seq')
+    column_Seq_detailed = pd.Series([[[locstoneid[locs[int(item)]] for item in items] for items in x[0]] for x in freqSeqs],name='Seq_detailed') #具体点的
+    column_sup = pd.Series([x[1] for x in freqSeqs],name='sup')
+    con = pd.concat([column_Seq,column_Seq_detailed,column_sup],axis=1)
+    con.to_csv(output_freseqs_path,index = True,sep=',',mode='w+',encoding='utf_8_sig')
 
     
     # ## 序列规则挖掘 RuleGrowth
@@ -73,12 +77,11 @@ if __name__ == '__main__':
     model = CPT()
     # 划分一下数据集
     train,test = dp.data_split(Seqs,10000)
-    # train = Seqs
+    train = Seqs
     # train = Seqs[:-10000]
     # test = Seqs[-10000:]
     truth = [[x[-1]] for x in test]
     test = [x[:-1] for x in test]
-    # train += dp.Seqs_dim_reduction([x[0] for x in freqSeqs])
     model.train(train)
     # 开始预测
     p = model.predict(train,test,5,1)
