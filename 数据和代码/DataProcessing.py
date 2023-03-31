@@ -99,6 +99,13 @@ def sortByoccurtime(data):
     data=sorted(data,key=lambda x : datetime.strptime(x[3],'%Y/%m/%d %H:%M'), reverse=False)
     return data
 
+def sortBylogid(data):
+    '''
+    根据日志id排序
+    '''
+    data=sorted(data,key=lambda x : x[0], reverse=False)
+    return data
+
 def Datacleaninside(data,Max_Interval = 300):
     '''
     内部数据清洗，清理掉alarms中由同一告警引起的、时间上连续的告警数据
@@ -156,6 +163,53 @@ def GenSeqs(data,Max_Interval):
         curtime = occurtime_i
     return Seqs
 
+def GenSeqs_2d(data,Max_Interval):
+    '''
+    生成所有时间序列
+    Max_Interval：判断一个告警是否属于上一个序列的最长间隔时间,单位秒，此参数越长，生成的时间序列越长
+    在时间上同时发生的告警按日志id排序
+    Return: Seqs    如[data[0],data[1],data[2],...]
+    '''
+    Seqs = GenSeqs(data,Max_Interval)
+    for i in range(len(Seqs)):
+        tmp = []
+        for j in range(len(Seqs[i])):
+            if len(Seqs[i][j])>1:
+                Seqs[i][j] = sortBylogid(Seqs[i][j])
+                for k in Seqs[i][j]:
+                    tmp.append(k)
+                pass
+            else:
+                tmp.append(Seqs[i][j][0])
+        Seqs[i]=tmp
+    return Seqs
+
+def GenSeqs_3d(data,Max_Interval):
+    '''
+    生成所有时间序列
+    Max_Interval：判断一个告警是否属于上一个序列的最长间隔时间,单位秒，此参数越长，生成的时间序列越长
+    在时间上同时发生的告警按日志id排序
+    Return: Seqs    如[[data[0]],[data[1]],[data[2]],...]
+    '''
+    Seqs = GenSeqs_2d(data,Max_Interval)
+    Seqs = Seqs_2dto3d(Seqs)
+    return Seqs
+
+def Seqs_2dto3d(Seqs):
+    '''2d序列转3d序列'''
+    for i in range(len(Seqs)):
+        for j in range(len(Seqs[i])):
+            Seqs[i][j] = [Seqs[i][j]]
+    return Seqs
+
+def Seqs_3dto2d(Seqs):
+    '''3d序列转2d序列'''
+    for i in range(len(Seqs)):
+        for j in range(len(Seqs[i])):
+            Seqs[i][j] = Seqs[i][j][0]
+    return Seqs
+
+
 def Seq_compression(seq):
     '''
     压缩序列
@@ -187,6 +241,7 @@ def Seqs_dim_reduction(Seqs):
         if estimate >= 100000:
             x = len(seq)
             return SeqtoSeqs(seq[:int(x/2)])+SeqtoSeqs(seq[int(x/2):])
+            # return SeqtoSeqs(seq[int(x/2):])
         res = []
         que = Queue()
         que.put(seq)
@@ -259,13 +314,13 @@ def Datacluster(data,eps=0.001,min_samples=1):
             db = DBSCAN(eps=eps, min_samples=min_samples)
             db.fit(X)
             labelTodata = defaultdict(list)
-            labelTomaxdiff = defaultdict(int)
+            # labelTomaxdiff = defaultdict(int)
             for i in range(len(db.labels_)):
                 labelTodata[db.labels_[i]].append(alarmBysamecode[i])
-                labelTomaxdiff[db.labels_[i]] = datetime.strptime(labelTodata[db.labels_[i]][-1][3],'%Y/%m/%d %H:%M') - datetime.strptime(labelTodata[db.labels_[i]][0][3],'%Y/%m/%d %H:%M')
-                labelTomaxdiff[db.labels_[i]] = labelTomaxdiff[db.labels_[i]].total_seconds()
+                # labelTomaxdiff[db.labels_[i]] = datetime.strptime(labelTodata[db.labels_[i]][-1][3],'%Y/%m/%d %H:%M') - datetime.strptime(labelTodata[db.labels_[i]][0][3],'%Y/%m/%d %H:%M')
+                # labelTomaxdiff[db.labels_[i]] = labelTomaxdiff[db.labels_[i]].total_seconds()
             for label in labelTodata:
-                newdata.append(labelTodata[db.labels_[i]][0])
+                newdata.append(labelTodata[label][0])
             pass
     return newdata
 
